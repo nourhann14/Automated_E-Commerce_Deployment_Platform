@@ -3,12 +3,12 @@
 The Automated E-Commerce Deployment Platform is a DevOps-based project designed to deploy, manage, and monitor a scalable, containerized e-commerce application using modern DevOps tools and cloud infrastructure. The platform consists of multiple microservices including a web application, backend services, database, and supporting services such as payment and search.
 
 ## Team Members:
-Nourhan Ahmed Hassan
-Kirlus Micheal Amin
-Israa Fathi Ahmed
-Abdulaziz Mohamed Hussein
-Fatmaa Elzahraa Kamel Fawzy
-Alhussein Ashraf Fikry
+- Nourhan Ahmed Hassan
+- Kirlus Micheal Amin
+- Israa Fathi Ahmed
+- Abdulaziz Mohamed Hussein
+- Fatmaa Elzahraa Kamel Fawzy
+- Alhussein Ashraf Fikry
 
 ## Project Objectives
 - Containerize application services using Docker
