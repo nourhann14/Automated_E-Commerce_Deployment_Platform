@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        BACKEND_IMAGE = 'yourusername/mern-amazona-backend'
-        FRONTEND_IMAGE = 'yourusername/mern-amazona-frontend'
+        BACKEND_IMAGE = 'nourhan14/mern-amazona-backend'
+        FRONTEND_IMAGE = 'nourhan14/mern-amazona-frontend'
         IMAGE_TAG = "${GIT_COMMIT[0..6]}"
     }
 
@@ -42,6 +42,16 @@ pipeline {
                 sh '''
                     echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
 
+                    # Save current latest as "previous" before pushing new one
+                    docker pull $BACKEND_IMAGE:latest && \
+                    docker tag $BACKEND_IMAGE:latest $BACKEND_IMAGE:previous && \
+                    docker push $BACKEND_IMAGE:previous || true
+
+                    docker pull $FRONTEND_IMAGE:latest && \
+                    docker tag $FRONTEND_IMAGE:latest $FRONTEND_IMAGE:previous && \
+                    docker push $FRONTEND_IMAGE:previous || true
+
+                    # Push new version
                     docker tag backend:latest $BACKEND_IMAGE:$IMAGE_TAG
                     docker tag backend:latest $BACKEND_IMAGE:latest
                     docker push $BACKEND_IMAGE:$IMAGE_TAG
@@ -65,20 +75,50 @@ pipeline {
                 '''
             }
         }
+
+        stage('Verify Deployment') {
+            steps {
+                echo 'Verifying deployment is healthy...'
+                sh '''
+                    sleep 15
+                    curl -f http://localhost:4000/api/products || exit 1
+                    echo "✅ Deployment verified successfully!"
+                '''
+            }
+        }
+
+        stage('Rollback') {
+            when {
+                expression { currentBuild.result == 'FAILURE' }
+            }
+            steps {
+                echo '❌ Deployment failed — rolling back to previous version...'
+                sh '''
+                    echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+
+                    # Pull previous stable images
+                    docker pull $BACKEND_IMAGE:previous
+                    docker pull $FRONTEND_IMAGE:previous
+
+                    # Tag them back as latest
+                    docker tag $BACKEND_IMAGE:previous $BACKEND_IMAGE:latest
+                    docker tag $FRONTEND_IMAGE:previous $FRONTEND_IMAGE:latest
+
+                    # Redeploy with previous version
+                    docker compose down
+                    docker compose up -d
+                    echo "✅ Rolled back to previous version successfully!"
+                '''
+            }
+        }
     }
 
     post {
         success {
-            echo '✅ Deployment successful!'
+            echo '✅ Pipeline completed successfully!'
         }
         failure {
-            echo '❌ Build failed — rolling back to previous version...'
-            sh '''
-                docker compose down
-                docker tag $BACKEND_IMAGE:previous $BACKEND_IMAGE:latest || true
-                docker tag $FRONTEND_IMAGE:previous $FRONTEND_IMAGE:latest || true
-                docker compose up -d
-            '''
+            echo '❌ Pipeline failed! Check logs above.'
         }
     }
 }
