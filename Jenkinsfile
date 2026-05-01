@@ -31,8 +31,8 @@ pipeline {
                     docker ps -q --filter "publish=4000" | xargs -r docker stop | xargs -r docker rm || true
                     docker ps -q --filter "publish=27017" | xargs -r docker stop | xargs -r docker rm || true
                     docker compose up -d mongodb backend
-                    sleep 10
-                    curl -f http://localhost:4000/api/products || exit 1
+                    sleep 15
+                    docker exec mern-cicd-pipeline-backend-1 curl -f http://localhost:4000/api/products || exit 1
                     docker compose down
                 '''
             }
@@ -83,7 +83,7 @@ pipeline {
                 echo 'Verifying deployment is healthy...'
                 sh '''
                     sleep 15
-                    curl -f http://localhost:4000/api/products || exit 1
+                    docker exec mern-cicd-pipeline-backend-1 curl -f http://localhost:4000/api/products || exit 1
                     echo "✅ Deployment verified successfully!"
                 '''
             }
