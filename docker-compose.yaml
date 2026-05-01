@@ -29,7 +29,9 @@ services:
     restart: always
 
   jenkins:
-    image: jenkins/jenkins:lts
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
     container_name: jenkins
     user: root
     ports:
@@ -37,9 +39,9 @@ services:
     volumes:
       - jenkins-data:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker     
+      - /usr/bin/docker:/usr/bin/docker
     restart: always
- 
+    
 volumes:
   mongo-data:
   jenkins-data:
