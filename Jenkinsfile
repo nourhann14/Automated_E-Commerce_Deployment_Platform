@@ -17,6 +17,17 @@ pipeline {
             }
         }
 
+        stage('Cleanup') {
+            steps {
+                echo 'Cleaning up any leftover containers...'
+                sh '''
+                    docker ps -q --filter "publish=4000" | xargs -r docker stop | xargs -r docker rm || true
+                    docker ps -q --filter "publish=3000" | xargs -r docker stop | xargs -r docker rm || true
+                    docker compose down || true
+                '''
+            }
+        }
+        
         stage('Build Images') {
             steps {
                 echo 'Building Docker images...'
@@ -116,6 +127,9 @@ pipeline {
     }
 
     post {
+        always {
+            sh 'docker compose down || true'
+        }
         success {
             echo '✅ Pipeline completed successfully!'
         }
