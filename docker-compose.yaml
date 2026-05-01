@@ -31,11 +31,13 @@ services:
   jenkins:
     image: jenkins/jenkins:lts-slim
     container_name: jenkins
+    user: root
     ports:
       - "8080:8080"
     volumes:
       - jenkins-data:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker     
     restart: always
  
 volumes:
