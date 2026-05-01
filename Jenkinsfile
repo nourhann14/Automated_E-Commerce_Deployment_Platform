@@ -27,7 +27,7 @@ pipeline {
                 '''
             }
         }
-        
+
         stage('Build Images') {
             steps {
                 echo 'Building Docker images...'
@@ -82,9 +82,8 @@ pipeline {
             steps {
                 echo 'Deploying latest version...'
                 sh '''
-                    docker compose down --remove-orphans
                     docker compose pull
-                    docker compose up -d
+                    docker compose up -d mongodb backend frontend
                 '''
             }
         }
@@ -108,18 +107,12 @@ pipeline {
                 echo '❌ Deployment failed — rolling back to previous version...'
                 sh '''
                     echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-
-                    # Pull previous stable images
                     docker pull $BACKEND_IMAGE:previous
                     docker pull $FRONTEND_IMAGE:previous
-
-                    # Tag them back as latest
                     docker tag $BACKEND_IMAGE:previous $BACKEND_IMAGE:latest
                     docker tag $FRONTEND_IMAGE:previous $FRONTEND_IMAGE:latest
-
-                    # Redeploy with previous version
                     docker compose down
-                    docker compose up -d
+                    docker compose up -d mongodb backend frontend
                     echo "✅ Rolled back to previous version successfully!"
                 '''
             }
