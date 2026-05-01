@@ -29,7 +29,7 @@ services:
     restart: always
 
   jenkins:
-    image: jenkins/jenkins:lts-slim
+    image: jenkins/jenkins:lts
     container_name: jenkins
     user: root
     ports:

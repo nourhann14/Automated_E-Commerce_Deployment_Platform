@@ -28,6 +28,7 @@ pipeline {
             steps {
                 echo 'Testing backend is reachable...'
                 sh '''
+                    docker compose down
                     docker compose up -d mongodb backend
                     sleep 10
                     curl -f http://localhost:4000/api/products || exit 1
@@ -69,7 +70,7 @@ pipeline {
             steps {
                 echo 'Deploying latest version...'
                 sh '''
-                    docker compose down
+                    docker compose down --remove-orphans
                     docker compose pull
                     docker compose up -d
                 '''
