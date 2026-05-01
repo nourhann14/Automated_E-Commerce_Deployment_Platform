@@ -1,0 +1,42 @@
+services:
+  mongodb:
+    image: mongo:6
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+ 
+  backend:
+    build: ./backend
+    container_name: backend
+    ports:
+      - "4000:4000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/amazona
+      - JWT_SECRET=secret123
+    depends_on:
+      - mongodb
+    restart: always
+ 
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: always
+
+  jenkins:
+    image: jenkins/jenkins:lts-slim
+    container_name: jenkins
+    ports:
+      - "8080:8080"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+ 
+volumes:
+  mongo-data:
+  jenkins-data:
