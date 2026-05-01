@@ -26,7 +26,7 @@ pipeline {
 
         stage('Test Backend') {
             steps {
-                echo 'Testing backend is reachable...')
+                echo 'Testing backend is reachable...'
                 sh '''
                     docker ps -q --filter "publish=4000" | xargs -r docker stop | xargs -r docker rm || true
                     docker ps -q --filter "publish=27017" | xargs -r docker stop | xargs -r docker rm || true
