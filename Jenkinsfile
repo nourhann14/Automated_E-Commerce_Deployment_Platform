@@ -121,13 +121,15 @@ pipeline {
 
     post {
         always {
-            sh 'docker compose down || true'
+            echo 'Pipeline finished.'
         }
         success {
             echo '✅ Pipeline completed successfully!'
         }
         failure {
             echo '❌ Pipeline failed! Check logs above.'
+            sh 'docker compose down || true'
         }
     }
+    
 }
