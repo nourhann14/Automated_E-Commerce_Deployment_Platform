@@ -38,7 +38,7 @@ services:
     restart: always
 
   localstack:
-    image: localstack/localstack
+    image: localstack/localstack:3.0
     container_name: localstack
     ports:
       - "4566:4566"
