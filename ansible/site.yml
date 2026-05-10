@@ -1,0 +1,5 @@
+---
+- import_playbook: playbooks/common.yml
+- import_playbook: playbooks/jenkins.yml
+- import_playbook: playbooks/nginx.yml
+- import_playbook: playbooks/setup_docker.yml

@@ -1,0 +1,14 @@
+---
+ansible_python_interpreter: /usr/bin/python3
+
+docker_packages:
+  - docker
+  - docker-compose
+
+system_packages:
+  - curl
+  - wget
+  - git
+  - unzip
+  - python3
+  - python3-pip

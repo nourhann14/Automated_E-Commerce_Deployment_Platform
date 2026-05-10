@@ -1,0 +1,114 @@
+---
+- name: Install Jenkins on Jenkins Server
+  hosts: jenkins
+  become: yes
+
+  tasks:
+
+    # ── System update ────────────────────────────────────────────────────
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - curl
+          - gnupg
+          - ca-certificates
+          - apt-transport-https
+        state: present
+
+    # ── Docker ───────────────────────────────────────────────────────────
+    - name: Remove old Docker keyring if exists
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/share/keyrings/docker-archive-keyring.gpg
+        - /etc/apt/sources.list.d/docker.list
+
+    - name: Download and dearmor Docker GPG key
+      shell: |
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+      args:
+        executable: /bin/bash
+
+    - name: Set permissions on Docker keyring
+      file:
+        path: /usr/share/keyrings/docker-archive-keyring.gpg
+        mode: '0644'
+
+    - name: Get Ubuntu codename
+      command: lsb_release -cs
+      register: ubuntu_codename
+      changed_when: false
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ubuntu_codename.stdout }} stable"
+        state: present
+        filename: docker
+        update_cache: yes
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Start and enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    # ── kubectl ──────────────────────────────────────────────────────────
+    - name: Install kubectl
+      get_url:
+        url: "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: '0755'
+
+    # ── Jenkins via Docker ───────────────────────────────────────────────
+    - name: Create Jenkins data volume
+      community.docker.docker_volume:
+        name: jenkins_home
+        state: present
+
+    - name: Run Jenkins container
+      community.docker.docker_container:
+        name: jenkins
+        image: jenkins/jenkins:lts
+        state: started
+        restart_policy: always
+        ports:
+          - "8080:8080"
+          - "50000:50000"
+        volumes:
+          - jenkins_home:/var/jenkins_home
+          - /var/run/docker.sock:/var/run/docker.sock
+
+     # ── Jenkins initial admin password ───────────────────────────────────
+    - name: Wait for Jenkins container to initialize
+      community.docker.docker_container_exec:
+        container: jenkins
+        command: test -f /var/jenkins_home/secrets/initialAdminPassword
+      register: password_check
+      retries: 10
+      delay: 10
+      until: password_check.rc == 0
+
+    - name: Get Jenkins initial admin password
+      community.docker.docker_container_exec:
+        container: jenkins
+        command: cat /var/jenkins_home/secrets/initialAdminPassword
+      register: jenkins_password
+
+    - name: Print Jenkins initial admin password
+      debug:
+        msg: "Jenkins admin password: {{ jenkins_password.stdout }}"

@@ -1,0 +1,55 @@
+---
+- name: Nginx Reverse Proxy Setup
+  hosts: jenkins
+  become: yes
+
+  tasks:
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Configure Nginx as reverse proxy
+      copy:
+        dest: /etc/nginx/conf.d/mern-amazona.conf
+        content: |
+          server {
+              listen 80;
+              server_name _;
+
+              location / {
+                  proxy_pass http://localhost:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+              location /api/ {
+                  proxy_pass http://localhost:4000/api/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+              location /jenkins/ {
+                  proxy_pass http://localhost:8080/jenkins/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+          }
+
+    - name: Start and enable Nginx
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
