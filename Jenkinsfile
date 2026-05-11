@@ -73,7 +73,7 @@ pipeline {
 
                     docker logs backend-container
 
-                   curl -f http://localhost:4000/api/products | grep '\['
+                 sh "curl http://localhost:4000/api/products | grep '\\['"
                 '''
             }
         }
