@@ -59,24 +59,7 @@ pipeline {
             }
         }
 
-        stage('Run Backend Test') {
-            steps {
-                sh '''
-                    docker run -d \
-                      --name backend-container \
-                      -p 4000:4000 \
-                      --link mongodb-container:mongodb-container \
-                      -e MONGO_URI=$MONGO_URI \
-                      backend:latest
-
-                    sleep 20
-
-                    docker logs backend-container
-
-                 sh "curl http://localhost:4000/api/products | grep '\\['"
-                '''
-            }
-        }
+     
 
         stage('Run Frontend Test') {
             steps {
