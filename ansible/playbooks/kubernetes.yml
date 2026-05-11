@@ -1,0 +1,265 @@
+---
+# playbooks/kubernetes.yml
+# Provisions the e2-small kubernetes VM with:
+#   - k3s (lightweight Kubernetes)
+#   - MongoDB pod
+#   - Backend pod  (nourhan14/mern-amazona-backend)
+#   - Frontend pod (nourhan14/mern-amazona-frontend)
+
+- name: Setup Kubernetes VM (k3s + MongoDB + Backend + Frontend)
+  hosts: kubernetes
+  become: yes
+
+  vars:
+    k3s_version: "v1.29.4+k3s1"
+    manifest_dir: /home/ubuntu/manifests
+
+  tasks:
+
+    # ── Prerequisites ────────────────────────────────────────────────────────
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - curl
+          - open-iscsi
+        state: present
+
+    # ── k3s install ──────────────────────────────────────────────────────────
+    - name: Check if k3s is already installed
+      stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Install k3s
+      when: not k3s_binary.stat.exists
+      shell: |
+        curl -sfL https://get.k3s.io | \
+          INSTALL_K3S_VERSION="{{ k3s_version }}" \
+          sh -s - server \
+          --write-kubeconfig-mode 644 \
+          --node-name kubernetes
+      args:
+        executable: /bin/bash
+
+    - name: Enable and start k3s
+      systemd:
+        name: k3s
+        enabled: yes
+        state: started
+
+    - name: Wait for k3s node to be Ready
+      command: k3s kubectl get node kubernetes --no-headers
+      register: node_status
+      until: "'Ready' in node_status.stdout"
+      retries: 20
+      delay: 10
+      changed_when: false
+
+    - name: Show node status
+      debug:
+        var: node_status.stdout
+
+    # ── Manifests directory ──────────────────────────────────────────────────
+    - name: Create manifests directory
+      file:
+        path: "{{ manifest_dir }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+
+    # ── MongoDB ──────────────────────────────────────────────────────────────
+    - name: Write MongoDB manifest
+      copy:
+        dest: "{{ manifest_dir }}/mongodb.yaml"
+        mode: "0644"
+        content: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: mongodb
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: mongodb
+            template:
+              metadata:
+                labels:
+                  app: mongodb
+              spec:
+                containers:
+                  - name: mongodb
+                    image: mongo:6
+                    ports:
+                      - containerPort: 27017
+                    volumeMounts:
+                      - name: mongo-data
+                        mountPath: /data/db
+                volumes:
+                  - name: mongo-data
+                    emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: mongodb
+          spec:
+            selector:
+              app: mongodb
+            ports:
+              - port: 27017
+                targetPort: 27017
+
+    # ── Backend ──────────────────────────────────────────────────────────────
+    - name: Write Backend manifest
+      copy:
+        dest: "{{ manifest_dir }}/backend.yaml"
+        mode: "0644"
+        content: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: backend
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: backend
+            template:
+              metadata:
+                labels:
+                  app: backend
+              spec:
+                containers:
+                  - name: backend
+                    image: nourhan14/mern-amazona-backend:latest
+                    ports:
+                      - containerPort: 4000
+                    env:
+                      - name: MONGODB_URI
+                        value: "mongodb://mongodb:27017/mern-amazona"
+                      - name: NODE_ENV
+                        value: "production"
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: backend
+          spec:
+            selector:
+              app: backend
+            ports:
+              - port: 4000
+                targetPort: 4000
+
+    # ── Frontend ─────────────────────────────────────────────────────────────
+    - name: Write Frontend manifest
+      copy:
+        dest: "{{ manifest_dir }}/frontend.yaml"
+        mode: "0644"
+        content: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: frontend
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: frontend
+            template:
+              metadata:
+                labels:
+                  app: frontend
+              spec:
+                containers:
+                  - name: frontend
+                    image: nourhan14/mern-amazona-frontend:latest
+                    ports:
+                      - containerPort: 3000
+                    env:
+                      - name: REACT_APP_BACKEND_URL
+                        value: "http://backend:4000"
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: frontend
+          spec:
+            type: NodePort
+            selector:
+              app: frontend
+            ports:
+              - port: 3000
+                targetPort: 3000
+                nodePort: 30000
+
+    # ── Apply all manifests ──────────────────────────────────────────────────
+    - name: Apply MongoDB manifest
+      command: k3s kubectl apply -f {{ manifest_dir }}/mongodb.yaml
+      register: mongo_apply
+      changed_when: "'created' in mongo_apply.stdout or 'configured' in mongo_apply.stdout"
+
+    - name: Apply Backend manifest
+      command: k3s kubectl apply -f {{ manifest_dir }}/backend.yaml
+      register: backend_apply
+      changed_when: "'created' in backend_apply.stdout or 'configured' in backend_apply.stdout"
+
+    - name: Apply Frontend manifest
+      command: k3s kubectl apply -f {{ manifest_dir }}/frontend.yaml
+      register: frontend_apply
+      changed_when: "'created' in frontend_apply.stdout or 'configured' in frontend_apply.stdout"
+
+    # ── Wait for pods ────────────────────────────────────────────────────────
+    - name: Wait for MongoDB pod to be Running
+      command: k3s kubectl get pods -l app=mongodb --no-headers
+      register: mongo_status
+      until: "'Running' in mongo_status.stdout"
+      retries: 20
+      delay: 10
+      changed_when: false
+
+    - name: Wait for Backend pod to be Running
+      command: k3s kubectl get pods -l app=backend --no-headers
+      register: backend_status
+      until: "'Running' in backend_status.stdout"
+      retries: 20
+      delay: 10
+      changed_when: false
+
+    - name: Wait for Frontend pod to be Running
+      command: k3s kubectl get pods -l app=frontend --no-headers
+      register: frontend_status
+      until: "'Running' in frontend_status.stdout"
+      retries: 20
+      delay: 10
+      changed_when: false
+
+    # ── Summary ──────────────────────────────────────────────────────────────
+    - name: Show all pods
+      command: k3s kubectl get pods
+      register: all_pods
+      changed_when: false
+
+    - name: Show all services
+      command: k3s kubectl get services
+      register: all_services
+      changed_when: false
+
+    - name: Print pod status
+      debug:
+        var: all_pods.stdout_lines
+
+    - name: Print service status
+      debug:
+        var: all_services.stdout_lines
+
+    - name: Print access URL
+      debug:
+        msg: "Frontend accessible at http://{{ ansible_host }}:30000"

@@ -14,10 +14,22 @@ variable "project_name" {
   default = "mern-amazona"
 }
 
-variable "jenkins_machine_type" {
+variable "controller_machine_type" {
   default = "e2-medium"
 }
 
-variable "k8s_machine_type" {
-  default = "e2-medium"
+variable "kubernetes_machine_type" {
+  default = "e2-small"
+}
+
+variable "image" {
+  default = "ubuntu-os-cloud/ubuntu-2204-lts"
+}
+
+variable "ssh_user" {
+  default = "ubuntu"
+}
+
+variable "ssh_pub_key_path" {
+  default = "/home/nourhan14/.ssh/id_rsa.pub"
 }

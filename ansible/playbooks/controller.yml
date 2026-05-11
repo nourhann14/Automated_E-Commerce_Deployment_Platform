@@ -1,6 +1,6 @@
 ---
-- name: Install Jenkins on Jenkins Server
-  hosts: jenkins
+- name: Setup Controller (Jenkins + kubectl)
+  hosts: controller
   become: yes
 
   tasks:

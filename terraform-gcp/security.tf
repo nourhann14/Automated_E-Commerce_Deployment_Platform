@@ -32,11 +32,6 @@ resource "google_compute_firewall" "kubernetes" {
 
   allow {
     protocol = "tcp"
-    ports    = ["6443"]
-  }
-
-  allow {
-    protocol = "tcp"
     ports    = ["80"]
   }
 
@@ -52,4 +47,18 @@ resource "google_compute_firewall" "kubernetes" {
 
   target_tags   = ["kubernetes"]
   source_ranges = ["0.0.0.0/0"]
+}
+
+# k3s API — only reachable from the controller VM
+resource "google_compute_firewall" "k3s_api" {
+  name    = "${var.project_name}-k3s-api-fw"
+  network = google_compute_network.main.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["6443"]
+  }
+
+  target_tags = ["kubernetes"]
+  source_tags = ["controller"]
 }
