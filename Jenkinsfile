@@ -141,7 +141,10 @@ pipeline {
                 sh '''
                     sleep 15
 
-                    curl -f http://localhost:4000/api/products
+                        sh """
+response=$(curl -s http://localhost:4000/api/products)
+echo "$response" | grep -q "\\["
+"""           
 
                     echo "Deployment verified successfully!"
                 '''
