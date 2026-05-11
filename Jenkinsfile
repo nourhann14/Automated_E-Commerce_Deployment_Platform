@@ -3,8 +3,10 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+
         BACKEND_IMAGE = 'nourhan14/mern-amazona-backend'
         FRONTEND_IMAGE = 'nourhan14/mern-amazona-frontend'
+
         IMAGE_TAG = "${GIT_COMMIT[0..6]}"
     }
 
@@ -19,59 +21,74 @@ pipeline {
 
         stage('Cleanup') {
             steps {
-                echo 'Cleaning up any leftover containers...'
+                echo 'Cleaning old containers...'
                 sh '''
-                    docker ps -q --filter "publish=4000" | xargs -r docker stop | xargs -r docker rm || true
-                    docker ps -q --filter "publish=3000" | xargs -r docker stop | xargs -r docker rm || true
-                    docker compose-down || true
+                    docker rm -f backend-container || true
+                    docker rm -f frontend-container || true
+                    docker rm -f mongodb-container || true
                 '''
             }
         }
 
-        stage('Build Images') {
+        stage('Build Backend Image') {
             steps {
-                echo 'Building Docker images...'
-                sh 'docker compose build --no-cache'
+                echo 'Building backend image...'
+
+                sh '''
+                    docker build -t backend:latest ./backend
+                '''
             }
         }
 
-        stage('Test Backend') {
+        stage('Build Frontend Image') {
             steps {
-                echo 'Testing backend is reachable...'
+                echo 'Building frontend image...'
+
                 sh '''
-                    docker ps -q --filter "publish=4000" | xargs -r docker stop | xargs -r docker rm || true
-                    docker ps -q --filter "publish=27017" | xargs -r docker stop | xargs -r docker rm || true
-                    docker compose-up -d mongodb backend
-                    sleep 15
-                    docker exec mern-cicd-pipeline-backend-1 curl -f http://localhost:4000/api/products || exit 1
-                    docker compose-down
+                    docker build -t frontend:latest ./frontend
+                '''
+            }
+        }
+
+        stage('Run Backend Test') {
+            steps {
+                echo 'Running backend container for testing...'
+
+                sh '''
+                    docker run -d \
+                        --name backend-container \
+                        -p 4000:4000 \
+                        backend:latest
+
+                    sleep 10
+
+                    curl -f http://localhost:4000/api/products
+
+                    docker rm -f backend-container
                 '''
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                echo 'Pushing images to Docker Hub...'
+                echo 'Logging into Docker Hub and pushing images...'
+
                 sh '''
-                    echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                    echo $DOCKERHUB_CREDENTIALS_PSW | docker login \
+                    -u $DOCKERHUB_CREDENTIALS_USR \
+                    --password-stdin
 
-                    # Save current latest as "previous" before pushing new one
-                    docker pull $BACKEND_IMAGE:latest && \
-                    docker tag $BACKEND_IMAGE:latest $BACKEND_IMAGE:previous && \
-                    docker push $BACKEND_IMAGE:previous || true
-
-                    docker pull $FRONTEND_IMAGE:latest && \
-                    docker tag $FRONTEND_IMAGE:latest $FRONTEND_IMAGE:previous && \
-                    docker push $FRONTEND_IMAGE:previous || true
-
-                    # Push new version
+                    # Backend
                     docker tag backend:latest $BACKEND_IMAGE:$IMAGE_TAG
                     docker tag backend:latest $BACKEND_IMAGE:latest
+
                     docker push $BACKEND_IMAGE:$IMAGE_TAG
                     docker push $BACKEND_IMAGE:latest
 
+                    # Frontend
                     docker tag frontend:latest $FRONTEND_IMAGE:$IMAGE_TAG
                     docker tag frontend:latest $FRONTEND_IMAGE:latest
+
                     docker push $FRONTEND_IMAGE:$IMAGE_TAG
                     docker push $FRONTEND_IMAGE:latest
                 '''
@@ -80,55 +97,52 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                echo 'Deploying latest version...'
+                echo 'Deploying containers...'
+
                 sh '''
-                    docker-compose pull
-                    docker-compose up -d mongodb backend frontend
+                    docker rm -f backend-container || true
+                    docker rm -f frontend-container || true
+
+                    docker run -d \
+                        --name backend-container \
+                        -p 4000:4000 \
+                        $BACKEND_IMAGE:latest
+
+                    docker run -d \
+                        --name frontend-container \
+                        -p 3000:80 \
+                        $FRONTEND_IMAGE:latest
                 '''
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                echo 'Verifying deployment is healthy...'
-                sh '''
-                    sleep 15
-                    docker exec mern-cicd-pipeline-backend-1 curl -f http://localhost:4000/api/products || exit 1
-                    echo "✅ Deployment verified successfully!"
-                '''
-            }
-        }
+                echo 'Verifying deployment...'
 
-        stage('Rollback') {
-            when {
-                expression { currentBuild.result == 'FAILURE' }
-            }
-            steps {
-                echo '❌ Deployment failed — rolling back to previous version...'
                 sh '''
-                    echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                    docker pull $BACKEND_IMAGE:previous
-                    docker pull $FRONTEND_IMAGE:previous
-                    docker tag $BACKEND_IMAGE:previous $BACKEND_IMAGE:latest
-                    docker tag $FRONTEND_IMAGE:previous $FRONTEND_IMAGE:latest
-                    docker-compose down
-                    docker-compose up -d mongodb backend frontend
-                    echo "✅ Rolled back to previous version successfully!"
+                    sleep 10
+
+                    curl -f http://localhost:4000/api/products
+
+                    echo "Deployment verified successfully!"
                 '''
             }
         }
     }
 
     post {
+
         always {
             echo 'Pipeline finished.'
         }
+
         success {
-            echo '✅ Pipeline completed successfully!'
+            echo 'Pipeline completed successfully!'
         }
+
         failure {
-            echo '❌ Pipeline failed! Check logs above.'
-            sh 'docker-compose down || true'  // only kill on failure
+            echo 'Pipeline failed!'
         }
     }
 }
