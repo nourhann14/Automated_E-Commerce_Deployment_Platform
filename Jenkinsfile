@@ -23,7 +23,7 @@ pipeline {
                 sh '''
                     docker ps -q --filter "publish=4000" | xargs -r docker stop | xargs -r docker rm || true
                     docker ps -q --filter "publish=3000" | xargs -r docker stop | xargs -r docker rm || true
-                    docker compose down || true
+                    docker compose-down || true
                 '''
             }
         }
@@ -41,10 +41,10 @@ pipeline {
                 sh '''
                     docker ps -q --filter "publish=4000" | xargs -r docker stop | xargs -r docker rm || true
                     docker ps -q --filter "publish=27017" | xargs -r docker stop | xargs -r docker rm || true
-                    docker compose up -d mongodb backend
+                    docker compose-up -d mongodb backend
                     sleep 15
                     docker exec mern-cicd-pipeline-backend-1 curl -f http://localhost:4000/api/products || exit 1
-                    docker compose down
+                    docker compose-down
                 '''
             }
         }
@@ -82,8 +82,8 @@ pipeline {
             steps {
                 echo 'Deploying latest version...'
                 sh '''
-                    docker compose pull
-                    docker compose up -d mongodb backend frontend
+                    docker-compose pull
+                    docker-compose up -d mongodb backend frontend
                 '''
             }
         }
@@ -111,8 +111,8 @@ pipeline {
                     docker pull $FRONTEND_IMAGE:previous
                     docker tag $BACKEND_IMAGE:previous $BACKEND_IMAGE:latest
                     docker tag $FRONTEND_IMAGE:previous $FRONTEND_IMAGE:latest
-                    docker compose down
-                    docker compose up -d mongodb backend frontend
+                    docker-compose down
+                    docker-compose up -d mongodb backend frontend
                     echo "✅ Rolled back to previous version successfully!"
                 '''
             }
@@ -128,7 +128,7 @@ pipeline {
         }
         failure {
             echo '❌ Pipeline failed! Check logs above.'
-            sh 'docker compose down || true'  // only kill on failure
+            sh 'docker-compose down || true'  // only kill on failure
         }
     }
 }
