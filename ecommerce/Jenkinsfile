@@ -1,0 +1,60 @@
+pipeline {
+    agent any
+
+    environment {
+        CURL_IMAGE = 'curlimages/curl:8.5.0'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build and test') {
+            steps {
+                dir('ecommerce') {
+                    sh '''
+                        set -e
+                        NET="ec-net-${BUILD_TAG}"
+
+                        docker rm -f "ec-frontend-${BUILD_TAG}" "ec-backend-${BUILD_TAG}" "ec-mysql-${BUILD_TAG}" 2>/dev/null || true
+                        docker network rm "$NET" 2>/dev/null || true
+                        docker network create "$NET"
+
+                        docker build -t "ec-backend:${BUILD_TAG}" ./backend
+                        docker build -t "ec-frontend:${BUILD_TAG}" ./frontend
+
+                        docker run -d --name "ec-mysql-${BUILD_TAG}" --network "$NET" --network-alias db \
+                          -e MYSQL_ROOT_PASSWORD='My:S3cr3t' \
+                          -v "$(pwd)/db/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql:ro" \
+                          mysql:8
+
+                        docker run -d --name "ec-backend-${BUILD_TAG}" --network "$NET" --network-alias backend \
+                          -e DB_HOST=db -e DB_PASSWORD='My:S3cr3t' \
+                          "ec-backend:${BUILD_TAG}"
+
+                        docker run -d --name "ec-frontend-${BUILD_TAG}" --network "$NET" --network-alias frontend \
+                          "ec-frontend:${BUILD_TAG}"
+
+                        sleep 35
+
+                        docker run --rm --network "$NET" "$CURL_IMAGE" -fsS http://backend:3000/api/health | grep -q '"ok":true'
+                        docker run --rm --network "$NET" "$CURL_IMAGE" -fsS http://frontend/api/health | grep -q '"ok":true'
+                        docker run --rm --network "$NET" "$CURL_IMAGE" -fsS http://frontend/api/products
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh '''
+                docker rm -f "ec-frontend-${BUILD_TAG}" "ec-backend-${BUILD_TAG}" "ec-mysql-${BUILD_TAG}" 2>/dev/null || true
+                docker network rm "ec-net-${BUILD_TAG}" 2>/dev/null || true
+            '''
+        }
+    }
+}
