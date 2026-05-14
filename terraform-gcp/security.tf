@@ -45,6 +45,17 @@ resource "google_compute_firewall" "kubernetes" {
     ports    = ["4000"]
   }
 
+  allow {
+    protocol = "tcp"
+    ports    = ["30000"]
+  }
+
+  allow {
+    protocol = "tcp"
+    ports    = ["30745"]   
+  }
+
+
   target_tags   = ["kubernetes"]
   source_ranges = ["0.0.0.0/0"]
 }

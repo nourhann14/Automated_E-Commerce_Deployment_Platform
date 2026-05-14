@@ -1,11 +1,4 @@
 ---
-# playbooks/kubernetes.yml
-# Provisions the e2-small kubernetes VM with:
-#   - k3s (lightweight Kubernetes)
-#   - MongoDB pod
-#   - Backend pod  (nourhan14/mern-amazona-backend)
-#   - Frontend pod (nourhan14/mern-amazona-frontend)
-
 - name: Setup Kubernetes VM (k3s + MongoDB + Backend + Frontend)
   hosts: kubernetes
   become: yes
@@ -13,23 +6,29 @@
   vars:
     k3s_version: "v1.29.4+k3s1"
     manifest_dir: /home/ubuntu/manifests
+    mongo_uri: mongodb+srv://nourhan_14:depi2026@cluster1.2mcjegp.mongodb.net/?test=Cluster1
 
   tasks:
 
-    # ── Prerequisites ────────────────────────────────────────────────────────
+    # ───────────────────────────────
+    # INSTALL BASICS
+    # ───────────────────────────────
     - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: 3600
 
-    - name: Install prerequisites
+    - name: Install dependencies
       apt:
         name:
           - curl
           - open-iscsi
+          - netcat-openbsd    # needed by init container wait script
         state: present
 
-    # ── k3s install ──────────────────────────────────────────────────────────
+    # ───────────────────────────────
+    # INSTALL K3S
+    # ───────────────────────────────
     - name: Check if k3s is already installed
       stat:
         path: /usr/local/bin/k3s
@@ -52,7 +51,10 @@
         enabled: yes
         state: started
 
-    - name: Wait for k3s node to be Ready
+    # ───────────────────────────────
+    # WAIT FOR CLUSTER TO BE READY
+    # ───────────────────────────────
+    - name: Wait for node to be Ready
       command: k3s kubectl get node kubernetes --no-headers
       register: node_status
       until: "'Ready' in node_status.stdout"
@@ -60,20 +62,18 @@
       delay: 10
       changed_when: false
 
-    - name: Show node status
-      debug:
-        var: node_status.stdout
-
-    # ── Manifests directory ──────────────────────────────────────────────────
-    - name: Create manifests directory
+    # ───────────────────────────────
+    # MANIFEST DIRECTORY
+    # ───────────────────────────────
+    - name: Create manifests folder
       file:
         path: "{{ manifest_dir }}"
         state: directory
-        owner: ubuntu
-        group: ubuntu
         mode: "0755"
 
-    # ── MongoDB ──────────────────────────────────────────────────────────────
+    # ───────────────────────────────
+    # MONGODB
+    # ───────────────────────────────
     - name: Write MongoDB manifest
       copy:
         dest: "{{ manifest_dir }}/mongodb.yaml"
@@ -101,6 +101,12 @@
                     volumeMounts:
                       - name: mongo-data
                         mountPath: /data/db
+                    readinessProbe:
+                      tcpSocket:
+                        port: 27017
+                      initialDelaySeconds: 5
+                      periodSeconds: 5
+                      failureThreshold: 10
                 volumes:
                   - name: mongo-data
                     emptyDir: {}
@@ -116,7 +122,9 @@
               - port: 27017
                 targetPort: 27017
 
-    # ── Backend ──────────────────────────────────────────────────────────────
+    # ───────────────────────────────
+    # BACKEND
+    # ───────────────────────────────
     - name: Write Backend manifest
       copy:
         dest: "{{ manifest_dir }}/backend.yaml"
@@ -136,6 +144,19 @@
                 labels:
                   app: backend
               spec:
+                initContainers:
+                  - name: wait-for-mongo
+                    image: busybox
+                    command:
+                      - sh
+                      - -c
+                      - |
+                        echo "Waiting for MongoDB to be ready..."
+                        until nc -z mongodb 27017; do
+                          echo "MongoDB not ready yet, retrying in 2s..."
+                          sleep 2
+                        done
+                        echo "MongoDB is up!"
                 containers:
                   - name: backend
                     image: nourhan14/mern-amazona-backend:latest
@@ -143,7 +164,7 @@
                       - containerPort: 4000
                     env:
                       - name: MONGODB_URI
-                        value: "mongodb://mongodb:27017/mern-amazona"
+                        value: "mongodb://mongodb:27017/amazona"
                       - name: NODE_ENV
                         value: "production"
           ---
@@ -158,7 +179,9 @@
               - port: 4000
                 targetPort: 4000
 
-    # ── Frontend ─────────────────────────────────────────────────────────────
+    # ───────────────────────────────
+    # FRONTEND
+    # ───────────────────────────────
     - name: Write Frontend manifest
       copy:
         dest: "{{ manifest_dir }}/frontend.yaml"
@@ -178,11 +201,24 @@
                 labels:
                   app: frontend
               spec:
+                initContainers:
+                  - name: wait-for-backend
+                    image: busybox
+                    command:
+                      - sh
+                      - -c
+                      - |
+                        echo "Waiting for Backend to be ready..."
+                        until nc -z backend 4000; do
+                          echo "Backend not ready yet, retrying in 2s..."
+                          sleep 2
+                        done
+                        echo "Backend is up!"
                 containers:
                   - name: frontend
                     image: nourhan14/mern-amazona-frontend:latest
                     ports:
-                      - containerPort: 3000
+                      - containerPort: 80
                     env:
                       - name: REACT_APP_BACKEND_URL
                         value: "http://backend:4000"
@@ -196,70 +232,46 @@
             selector:
               app: frontend
             ports:
-              - port: 3000
-                targetPort: 3000
+              - port: 80
+                targetPort: 80
                 nodePort: 30000
 
-    # ── Apply all manifests ──────────────────────────────────────────────────
-    - name: Apply MongoDB manifest
+    # ───────────────────────────────
+    # APPLY ALL MANIFESTS
+    # ───────────────────────────────
+    - name: Apply MongoDB
       command: k3s kubectl apply -f {{ manifest_dir }}/mongodb.yaml
-      register: mongo_apply
-      changed_when: "'created' in mongo_apply.stdout or 'configured' in mongo_apply.stdout"
 
-    - name: Apply Backend manifest
+    - name: Wait for MongoDB pod to be ready
+      command: k3s kubectl wait --for=condition=ready pod -l app=mongodb --timeout=120s
+      register: mongo_wait
+      retries: 3
+      delay: 10
+
+    - name: Apply Backend
       command: k3s kubectl apply -f {{ manifest_dir }}/backend.yaml
-      register: backend_apply
-      changed_when: "'created' in backend_apply.stdout or 'configured' in backend_apply.stdout"
 
-    - name: Apply Frontend manifest
+    - name: Apply Frontend
       command: k3s kubectl apply -f {{ manifest_dir }}/frontend.yaml
-      register: frontend_apply
-      changed_when: "'created' in frontend_apply.stdout or 'configured' in frontend_apply.stdout"
 
-    # ── Wait for pods ────────────────────────────────────────────────────────
-    - name: Wait for MongoDB pod to be Running
-      command: k3s kubectl get pods -l app=mongodb --no-headers
-      register: mongo_status
-      until: "'Running' in mongo_status.stdout"
-      retries: 20
-      delay: 10
+    # ───────────────────────────────
+    # DEBUG OUTPUT
+    # ───────────────────────────────
+    - name: Get all pods
+      command: k3s kubectl get pods -o wide
+      register: pods
       changed_when: false
 
-    - name: Wait for Backend pod to be Running
-      command: k3s kubectl get pods -l app=backend --no-headers
-      register: backend_status
-      until: "'Running' in backend_status.stdout"
-      retries: 20
-      delay: 10
-      changed_when: false
-
-    - name: Wait for Frontend pod to be Running
-      command: k3s kubectl get pods -l app=frontend --no-headers
-      register: frontend_status
-      until: "'Running' in frontend_status.stdout"
-      retries: 20
-      delay: 10
-      changed_when: false
-
-    # ── Summary ──────────────────────────────────────────────────────────────
-    - name: Show all pods
-      command: k3s kubectl get pods
-      register: all_pods
-      changed_when: false
-
-    - name: Show all services
+    - name: Get all services
       command: k3s kubectl get services
-      register: all_services
+      register: services
       changed_when: false
 
-    - name: Print pod status
-      debug:
-        var: all_pods.stdout_lines
+    - debug:
+        var: pods.stdout_lines
 
-    - name: Print service status
-      debug:
-        var: all_services.stdout_lines
+    - debug:
+        var: services.stdout_lines
 
-    - name: Print access URL
-      debug:
-        msg: "Frontend accessible at http://{{ ansible_host }}:30000"
+    - debug:
+        msg: "✅ Frontend available at: http://{{ ansible_host }}:30000"
