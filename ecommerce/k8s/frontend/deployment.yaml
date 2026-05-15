@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ecommerce-frontend:${IMAGE_TAG}
+          image: fatmakamal21/ecommerce-frontend:IMAGE_TAG
           ports:
             - containerPort: 80
 
