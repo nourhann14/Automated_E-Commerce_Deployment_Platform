@@ -2,59 +2,86 @@ pipeline {
     agent any
 
     environment {
-        CURL_IMAGE = 'curlimages/curl:8.5.0'
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials2')
+
+        BACKEND_IMAGE = 'fatmakamal21/ecommerce-backend'
+        FRONTEND_IMAGE = 'fatmakamal21/ecommerce-frontend'
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Clone Repo') {
             steps {
-                checkout scm
+                git branch: 'main',
+                    url: 'https://github.com/Fatmaalzhraakamal/new.git'
             }
         }
 
-        stage('Build and test') {
+        stage('Build Images') {
             steps {
                 dir('ecommerce') {
-                    sh '''
-                        set -e
-                        NET="ec-net-${BUILD_TAG}"
-
-                        docker rm -f "ec-frontend-${BUILD_TAG}" "ec-backend-${BUILD_TAG}" "ec-mysql-${BUILD_TAG}" 2>/dev/null || true
-                        docker network rm "$NET" 2>/dev/null || true
-                        docker network create "$NET"
-
-                        docker build -t "ec-backend:${BUILD_TAG}" ./backend
-                        docker build -t "ec-frontend:${BUILD_TAG}" ./frontend
-
-                        docker run -d --name "ec-mysql-${BUILD_TAG}" --network "$NET" --network-alias db \
-                          -e MYSQL_ROOT_PASSWORD='My:S3cr3t' \
-                          -v "$(pwd)/db/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql:ro" \
-                          mysql:8
-
-                        docker run -d --name "ec-backend-${BUILD_TAG}" --network "$NET" --network-alias backend \
-                          -e DB_HOST=db -e DB_PASSWORD='My:S3cr3t' \
-                          "ec-backend:${BUILD_TAG}"
-
-                        docker run -d --name "ec-frontend-${BUILD_TAG}" --network "$NET" --network-alias frontend \
-                          "ec-frontend:${BUILD_TAG}"
-
-                        sleep 35
-
-                        docker run --rm --network "$NET" "$CURL_IMAGE" -fsS http://backend:3000/api/health | grep -q '"ok":true'
-                        docker run --rm --network "$NET" "$CURL_IMAGE" -fsS http://frontend/api/health | grep -q '"ok":true'
-                        docker run --rm --network "$NET" "$CURL_IMAGE" -fsS http://frontend/api/products
-                    '''
+                    sh """
+                        docker build -t $BACKEND_IMAGE:$IMAGE_TAG ./backend
+                        docker build -t $FRONTEND_IMAGE:$IMAGE_TAG ./frontend
+                    """
                 }
             }
         }
-    }
 
-    post {
-        always {
-            sh '''
-                docker rm -f "ec-frontend-${BUILD_TAG}" "ec-backend-${BUILD_TAG}" "ec-mysql-${BUILD_TAG}" 2>/dev/null || true
-                docker network rm "ec-net-${BUILD_TAG}" 2>/dev/null || true
-            '''
+        stage('Login to Docker Hub') {
+            steps {
+                sh """
+                    echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                """
+            }
         }
+
+        stage('Push Images') {
+            steps {
+                sh """
+                    docker push $BACKEND_IMAGE:$IMAGE_TAG
+                    docker push $FRONTEND_IMAGE:$IMAGE_TAG
+                """
+            }
+        }
+
+        stage('Deploy on compose for testing') {
+            steps {
+                dir('ecommerce') {
+                    sh 'docker compose down -v'
+                    sh "TAG=${IMAGE_TAG} docker compose up -d"
+                }
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh 'sleep 15'
+                sh 'curl -f http://35.223.205.53:3001/'
+            }
+        }
+
+  stage('test kubectl tool') {
+    steps {
+      sh 'kubectl get pods'
+    }
+}
+stage('Deploy') {
+    steps {
+        dir('ecommerce') {
+            sh """
+            sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' k8s/backend/deployment.yaml
+            sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' k8s/frontend/deployment.yaml
+
+            kubectl apply -f k8s/
+
+            kubectl rollout status deployment/backend
+            kubectl rollout status deployment/frontend
+            """
+        }
+    }
+}
     }
 }
