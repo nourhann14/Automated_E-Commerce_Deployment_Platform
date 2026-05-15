@@ -38,20 +38,20 @@ User Browser
 http://136.111.221.77/
      ↓
 ┌─────────────────────────────────────────────┐
-│           GCP Kubernetes VM (e2-medium)      │
+│         GCP Kubernetes VM (e2-medium)       │
 │                                             │
-│  ┌──────────┐   ┌──────────┐   ┌─────────┐ │
-│  │ Frontend │ → │ Backend  │ → │  MySQL  │ │
-│  │  Nginx   │   │ Node.js  │   │    8    │ │
-│  │  :80     │   │  :3000   │   │  :3306  │ │
-│  └──────────┘   └──────────┘   └─────────┘ │
+│  ┌──────────┐   ┌──────────┐   ┌─────────┐  │
+│  │ Frontend │ → │ Backend  │ → │  MySQL  │  │
+│  │  Nginx   │   │ Node.js  │   │    8    │  │
+│  │  :80     │   │  :3000   │   │  :3306  │  │
+│  └──────────┘   └──────────┘   └─────────┘  │
 │                                             │
 │              k3s Kubernetes                 │
 └─────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────┐
-│          GCP Controller VM (e2-medium)       │
-│  Jenkins + Ansible + Terraform + kubectl    │
+│          GCP Controller VM (e2-medium)      │
+│              Jenkins + kubectl              │
 └─────────────────────────────────────────────┘
 ```
 
