@@ -87,7 +87,8 @@ Automated_E-Commerce_Deployment_Platform/
 │   │   └── nginx.conf
 │   ├── db/
 │   │   └── schema.sql
-│   └── docker-compose.yml
+│   |── docker-compose.yml
+|   └── Jenkinsfile
 ├── terraform-gcp/
 │   ├── main.tf
 │   ├── variables.tf
@@ -116,7 +117,7 @@ Two GCP Virtual Machines provisioned automatically using Terraform:
 
 | VM | Type | RAM | Purpose |
 |---|---|---|---|
-| Controller VM | e2-medium | 4GB | Jenkins + Ansible + Terraform + kubectl |
+| Controller VM | e2-medium | 4GB | Jenkins + kubectl                |
 | Kubernetes VM | e2-medium | 4GB | k3s + Frontend + Backend + MySQL |
 
 ### Terraform Commands
