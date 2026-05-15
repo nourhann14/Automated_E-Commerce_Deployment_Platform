@@ -1,5 +1,6 @@
 services:
   db:
+    container_name: db
     image: mysql:8
     environment:
       MYSQL_ROOT_PASSWORD: "My:S3cr3t"
@@ -13,6 +14,7 @@ services:
     restart: always
 
   backend:
+    container_name: backend
     image: fatmakamal21/ecommerce-backend:${TAG:-latest}
     ports:
       - "3000:3000"
@@ -23,6 +25,7 @@ services:
     restart: always
 
   frontend:
+    container_name: frontend
     image: fatmakamal21/ecommerce-frontend:${TAG:-latest}
     ports:
       - "3001:80"
@@ -35,4 +38,3 @@ services:
 networks:
   ec-net:
     driver: bridge
-    
