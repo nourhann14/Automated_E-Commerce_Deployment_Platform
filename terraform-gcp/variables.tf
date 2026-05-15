@@ -19,7 +19,7 @@ variable "controller_machine_type" {
 }
 
 variable "kubernetes_machine_type" {
-  default = "e2-small"
+  default = "e2-medium"
 }
 
 variable "image" {
