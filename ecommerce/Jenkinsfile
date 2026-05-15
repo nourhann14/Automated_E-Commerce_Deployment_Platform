@@ -10,12 +10,22 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
+    options {
+        disableConcurrentBuilds()
+    }
+
     stages {
+
+        stage('Clean Workspace') {
+            steps {
+                deleteDir()
+            }
+        }
 
         stage('Clone Repo') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Fatmaalzhraakamal/new.git'
+                    url: 'https://github.com/nourhann14/Automated_E-Commerce_Deployment_Platform.git'
             }
         }
 
@@ -47,41 +57,60 @@ pipeline {
             }
         }
 
-        stage('Deploy on compose for testing') {
+        // stage('Deploy on compose for testing') {
+        //     steps {
+        //         dir('ecommerce') {
+        //             sh '''
+        //                 docker compose down -v
+        //                 TAG=${IMAGE_TAG} docker compose up -d
+        //             '''
+        //         }
+        //     }
+        // }
+
+
+
+     
+
+        stage('Deploy') {
             steps {
                 dir('ecommerce') {
-                    sh 'docker compose down -v'
-                    sh "TAG=${IMAGE_TAG} docker compose up -d"
+                    sh """
+                        sed -i "s|IMAGE_TAG|${IMAGE_TAG}|g" k8s/backend/deployment.yaml
+                        sed -i "s|IMAGE_TAG|${IMAGE_TAG}|g" k8s/frontend/deployment.yaml
+
+                        echo "=== FRONTEND IMAGE AFTER SED ==="
+                        grep image k8s/frontend/deployment.yaml
+
+                        pwd
+                        find . -name frontend/deployment.yaml
+
+                       kubectl apply -f k8s/frontend/deployment.yaml
+                       kubectl apply -f k8s/backend/deployment.yaml    
+
+                        kubectl rollout status deployment/backend
+                        kubectl rollout status deployment/frontend
+                    """
                 }
             }
         }
 
-        stage('Smoke Test') {
+
+                stage('Smoke Test') {
             steps {
-                sh 'sleep 15'
-                sh 'curl -f http://35.223.205.53:3001/'
+                  dir('ecommerce') {
+                sh '''
+                   
+
+
+                    # Tier 1 + 2 + 3: frontend (nginx) is up and can reach backend (and DB via /api/health)
+                    curl -fsS http://136.111.221.77:31400/api/health | grep -q '"ok":true'
+                   
+                
+                '''
+            }
             }
         }
 
-  stage('test kubectl tool') {
-    steps {
-      sh 'kubectl get pods'
-    }
-}
-stage('Deploy') {
-    steps {
-        dir('ecommerce') {
-            sh """
-            sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' k8s/backend/deployment.yaml
-            sed -i 's|IMAGE_TAG|${IMAGE_TAG}|g' k8s/frontend/deployment.yaml
-
-            kubectl apply -f k8s/
-
-            kubectl rollout status deployment/backend
-            kubectl rollout status deployment/frontend
-            """
-        }
-    }
-}
     }
 }
