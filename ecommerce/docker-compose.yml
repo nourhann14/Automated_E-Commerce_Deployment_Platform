@@ -35,3 +35,4 @@ services:
 networks:
   ec-net:
     driver: bridge
+    
