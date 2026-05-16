@@ -87,6 +87,8 @@ pipeline {
 
                        kubectl apply -f k8s/frontend/deployment.yaml
                        kubectl apply -f k8s/backend/deployment.yaml    
+                       kubectl apply -f k8s/frontend-hpa.yaml
+                        kubectl apply -f k8s/backend-hpa.yaml
 
                         kubectl rollout status deployment/backend
                         kubectl rollout status deployment/frontend
