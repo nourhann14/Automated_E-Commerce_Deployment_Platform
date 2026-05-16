@@ -92,6 +92,7 @@ pipeline {
 
                         kubectl apply -f k8s/frontend-hpa.yaml
                         kubectl apply -f k8s/backend-hpa.yaml
+                        #    apply vpa for db
                         kubectl apply -f k8s/db-vpa.yaml
 
                         kubectl rollout status deployment/backend
