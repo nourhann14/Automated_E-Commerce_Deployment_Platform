@@ -347,4 +347,4 @@ ansible-playbook -i inventory.ini site.yml
 ---
 
 > **Egypt University of Informatics — DevOps Project 2026**
-> Project Presentation DEPI round 4
+> Project Presentation DEPI round 4 https://shorturl.at/uRoVT
