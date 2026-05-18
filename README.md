@@ -8,14 +8,14 @@ A fully automated DevOps pipeline for deploying a scalable three-tier e-commerce
 
 ## 👥 Team Members
 
-| Name | Role |
-|---|---|
-| Nourhan Ahmed Hassan | DevOps Lead |
-| Kirlus Micheal Amin | Infrastructure |
-| Israa Fathi Ahmed | CI/CD |
-| Abdulaziz Mohamed Hussein | Kubernetes |
-| Fatmaa Elzahraa Kamel Fawzy | Monitoring |
-| Alhussein Ashraf Fikry | Configuration |
+| Name |
+|---|
+| Nourhan Ahmed Hassan |
+| Kirlus Micheal Amin |
+| Israa Fathi Ahmed |
+| Abdulaziz Mohamed Hussein |
+| Fatmaa Elzahraa Kamel Fawzy |
+| Alhussein Ashraf Fikry |
 
 ---
 
